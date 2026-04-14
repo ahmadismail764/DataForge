@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AutoML — Upload data, train models, and download results without writing code." />
+  <title>AutoML — Automated Machine Learning</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ───────── Header ───────── -->
+  <header class="header">
+    <div class="header__inner">
+      <div class="logo">
+        <span class="logo__icon">⚙️</span>
+        <span class="logo__text">Auto<span class="logo__accent">ML</span></span>
+      </div>
+      <p class="header__tagline">Train machine-learning models — no code required</p>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- ───────── Step 1 · Upload ───────── -->
+    <section id="upload-section" class="card">
+      <h2 class="card__title"><span class="step-badge">1</span> Upload Dataset</h2>
+      <p class="card__subtitle">Supports <strong>.csv</strong> and <strong>.xlsx</strong> files</p>
+
+      <div id="drop-zone" class="drop-zone">
+        <div class="drop-zone__content">
+          <svg class="drop-zone__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 16V4m0 0L8 8m4-4l4 4"/><path d="M20 16v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2"/></svg>
+          <p>Drag &amp; drop your file here</p>
+          <span class="drop-zone__or">or</span>
+          <label class="btn btn--secondary" for="file-input">Browse Files</label>
+          <input type="file" id="file-input" accept=".csv,.xlsx" hidden />
+        </div>
+      </div>
+
+      <div id="file-info" class="file-info hidden">
+        <span id="file-name" class="file-info__name"></span>
+        <span id="file-shape" class="file-info__shape"></span>
+      </div>
+    </section>
+
+    <!-- ───────── Step 2 · Preview ───────── -->
+    <section id="preview-section" class="card hidden">
+      <h2 class="card__title"><span class="step-badge">2</span> Data Preview</h2>
+      <p class="card__subtitle">Showing the first 10 rows of your dataset</p>
+      <div class="table-wrap">
+        <table id="preview-table"></table>
+      </div>
+    </section>
+
+    <!-- ───────── Step 3 · Configure ───────── -->
+    <section id="config-section" class="card hidden">
+      <h2 class="card__title"><span class="step-badge">3</span> Configure Task</h2>
+
+      <div class="config-grid">
+        <!-- Task type -->
+        <fieldset class="config-group">
+          <legend>ML Task</legend>
+          <label class="radio-card" id="radio-classification">
+            <input type="radio" name="task" value="classification" />
+            <span class="radio-card__body">
+              <span class="radio-card__icon">🏷️</span>
+              <span class="radio-card__label">Classification</span>
+            </span>
+          </label>
+          <label class="radio-card" id="radio-regression">
+            <input type="radio" name="task" value="regression" />
+            <span class="radio-card__body">
+              <span class="radio-card__icon">📈</span>
+              <span class="radio-card__label">Regression</span>
+            </span>
+          </label>
+          <label class="radio-card" id="radio-clustering">
+            <input type="radio" name="task" value="clustering" />
+            <span class="radio-card__body">
+              <span class="radio-card__icon">🔵</span>
+              <span class="radio-card__label">Clustering</span>
+            </span>
+          </label>
+        </fieldset>
+
+        <!-- Target column -->
+        <div id="target-group" class="config-group hidden">
+          <label for="target-select" class="config-group__label">Target Column</label>
+          <select id="target-select" class="select"></select>
+        </div>
+      </div>
+
+      <button id="train-btn" class="btn btn--primary btn--lg" disabled>
+        <span class="btn__text">Train Model</span>
+        <span class="spinner hidden" id="train-spinner"></span>
+      </button>
+    </section>
+
+    <!-- ───────── Step 4 · Results ───────── -->
+    <section id="results-section" class="card hidden">
+      <h2 class="card__title"><span class="step-badge">4</span> Results</h2>
+
+      <div id="results-meta" class="results-meta"></div>
+
+      <div id="results-body" class="results-body"></div>
+
+      <button id="download-btn" class="btn btn--accent btn--lg hidden">
+        <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12m0 0l-4-4m4 4l4-4"/><path d="M4 18h16"/></svg>
+        Save Model (.joblib)
+      </button>
+    </section>
+
+  </main>
+
+  <!-- ───────── Footer ───────── -->
+  <footer class="footer">
+    <p>AutoML Platform &copy; 2026 — Built with FastAPI &amp; scikit-learn</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
