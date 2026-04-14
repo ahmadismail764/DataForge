@@ -1,4 +1,4 @@
-.cursorrules
+.cursor/
 
 # Python cache and bytecode
 __pycache__/
