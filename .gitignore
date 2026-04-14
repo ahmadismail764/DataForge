@@ -43,4 +43,3 @@ backend/models/
 .env
 .env.*
 !.env.example
-.cursorrules
