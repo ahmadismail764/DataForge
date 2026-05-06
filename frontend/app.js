@@ -39,7 +39,10 @@ dropZone.addEventListener("drop", (e) => {
   dropZone.classList.remove("drop-zone--active");
   if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
 });
-dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("click", (e) => {
+  if (e.target.closest("label, input, button, a")) return;
+  fileInput.click();
+});
 fileInput.addEventListener("change", () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
 
 async function handleFile(file) {

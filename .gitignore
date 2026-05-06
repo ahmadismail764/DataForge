@@ -43,3 +43,6 @@ backend/models/
 .env
 .env.*
 !.env.example
+
+# Local compatibility requirements
+backend/requirements-py314.txt

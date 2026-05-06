@@ -60,39 +60,36 @@
     <!-- ───────── Step 3 · Configure ───────── -->
     <section id="config-section" class="card hidden">
       <h2 class="card__title"><span class="step-badge">3</span> Configure Task</h2>
+      <!-- Task type -->
+      <fieldset class="config-group">
+        <legend>ML Task</legend>
+        <label class="radio-card" id="radio-classification">
+          <input type="radio" name="task" value="classification" />
+          <span class="radio-card__body">
+            <span class="radio-card__icon">🏷️</span>
+            <span class="radio-card__label">Classification</span>
+          </span>
+        </label>
+        <label class="radio-card" id="radio-regression">
+          <input type="radio" name="task" value="regression" />
+          <span class="radio-card__body">
+            <span class="radio-card__icon">📈</span>
+            <span class="radio-card__label">Regression</span>
+          </span>
+        </label>
+        <label class="radio-card" id="radio-clustering">
+          <input type="radio" name="task" value="clustering" />
+          <span class="radio-card__body">
+            <span class="radio-card__icon">🔵</span>
+            <span class="radio-card__label">Clustering</span>
+          </span>
+        </label>
+      </fieldset>
 
-      <div class="config-grid">
-        <!-- Task type -->
-        <fieldset class="config-group">
-          <legend>ML Task</legend>
-          <label class="radio-card" id="radio-classification">
-            <input type="radio" name="task" value="classification" />
-            <span class="radio-card__body">
-              <span class="radio-card__icon">🏷️</span>
-              <span class="radio-card__label">Classification</span>
-            </span>
-          </label>
-          <label class="radio-card" id="radio-regression">
-            <input type="radio" name="task" value="regression" />
-            <span class="radio-card__body">
-              <span class="radio-card__icon">📈</span>
-              <span class="radio-card__label">Regression</span>
-            </span>
-          </label>
-          <label class="radio-card" id="radio-clustering">
-            <input type="radio" name="task" value="clustering" />
-            <span class="radio-card__body">
-              <span class="radio-card__icon">🔵</span>
-              <span class="radio-card__label">Clustering</span>
-            </span>
-          </label>
-        </fieldset>
-
-        <!-- Target column -->
-        <div id="target-group" class="config-group hidden">
-          <label for="target-select" class="config-group__label">Target Column</label>
-          <select id="target-select" class="select"></select>
-        </div>
+      <!-- Target column -->
+      <div id="target-group" class="config-group hidden">
+        <label for="target-select" class="config-group__label">Target Column</label>
+        <select id="target-select" class="select"></select>
       </div>
 
       <button id="train-btn" class="btn btn--primary btn--lg" disabled>
