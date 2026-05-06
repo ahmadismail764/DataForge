@@ -1,6 +1,6 @@
-# AutoForge
+# Data Forge
 
-AutoForge is an end-to-end AutoML web application for non-technical users. It provides a simple frontend to upload tabular data, choose an ML task, train multiple models automatically, compare results, and download the best pipeline.
+Data Forge is an end-to-end AutoML web application for non-technical users. It provides a simple frontend to upload tabular data, choose an ML task, train multiple models automatically, compare results, and download the best pipeline.
 
 ## Features
 
@@ -9,12 +9,13 @@ AutoForge is an end-to-end AutoML web application for non-technical users. It pr
 - Choose task type: classification, regression, or clustering
 - Automatic preprocessing (missing values, encoding, scaling, and class balancing where needed)
 - Train multiple algorithms per task and select the best performer
+- **NEW:** Interactive Plotly.js visualizations for evaluating models (Confusion Matrix, Feature Importance, PCA Clusters, etc.)
 - Download trained model pipeline as `.joblib`
 
 ## Tech Stack
 
 - **Backend:** FastAPI
-- **Frontend:** Vanilla HTML/CSS/JavaScript
+- **Frontend:** Vanilla HTML/CSS/JavaScript + Plotly.js
 - **ML:** pandas, scikit-learn, imbalanced-learn
 - **Model serialization:** joblib
 
@@ -60,7 +61,11 @@ pip install -r requirements.txt
 ### 4) Run backend API
 
 ```bash
-uvicorn backend.main:app --reload --port 8000
+# Using uvicorn:
+uvicorn backend.main:app --reload --port 5001
+
+# Or run the script directly:
+python backend/main.py
 ```
 
 ### 5) Open frontend
@@ -81,7 +86,7 @@ Then navigate to `http://localhost:5500`.
 
 Interactive API docs are available at:
 
-- `http://localhost:8000/docs`
+- `http://localhost:5001/docs`
 
 ## Development Notes
 

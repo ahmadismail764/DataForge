@@ -12,6 +12,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sklearn.utils.multiclass import type_of_target
 
 from pipeline import run_classification, run_regression, run_clustering
 
@@ -19,7 +20,7 @@ from pipeline import run_classification, run_regression, run_clustering
 # App setup
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="AutoML API", version="1.0.0")
+app = FastAPI(title="Data Forge API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -74,9 +75,21 @@ async def upload_file(file: UploadFile = File(...)):
     preview = df.head(10).fillna("").to_dict(orient="records")
     columns = df.columns.tolist()
 
+    column_types = {}
+    for col in columns:
+        # Drop NAs to prevent type_of_target issues with mixed floats
+        col_data = df[col].dropna()
+        if col_data.empty:
+            column_types[col] = 'categorical' # Default if empty
+        elif type_of_target(col_data) == 'continuous':
+            column_types[col] = 'continuous'
+        else:
+            column_types[col] = 'categorical'
+
     return {
         "session_id": session_id,
         "columns": columns,
+        "column_types": column_types,
         "preview": preview,
         "shape": list(df.shape),
     }
@@ -140,4 +153,4 @@ async def download_model(model_id: str):
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", port=5001, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=5001, reload=True)

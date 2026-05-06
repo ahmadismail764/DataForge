@@ -3,12 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="AutoML — Upload data, train models, and download results without writing code." />
-  <title>AutoML — Automated Machine Learning</title>
+  <meta name="description" content="Data Forge — Upload data, train models, and download results without writing code." />
+  <title>Data Forge — Automated Machine Learning</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <!-- Plotly.js -->
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 </head>
 <body>
 
@@ -17,7 +19,7 @@
     <div class="header__inner">
       <div class="logo">
         <span class="logo__icon">⚙️</span>
-        <span class="logo__text">Auto<span class="logo__accent">ML</span></span>
+        <span class="logo__text">Data <span class="logo__accent">Forge</span></span>
       </div>
       <p class="header__tagline">Train machine-learning models — no code required</p>
     </div>
@@ -97,6 +99,11 @@
         <span class="btn__text">Train Model</span>
         <span class="spinner hidden" id="train-spinner"></span>
       </button>
+      
+      <!-- Inline Error Container -->
+      <div id="train-error" class="hidden" style="margin-top: 1rem; padding: 1rem; background: rgba(245,101,101,.1); border-left: 4px solid var(--danger); border-radius: var(--radius-sm); color: #fff;">
+        <strong>Wait!</strong> <span id="train-error-text"></span>
+      </div>
     </section>
 
     <!-- ───────── Step 4 · Results ───────── -->
@@ -117,7 +124,7 @@
 
   <!-- ───────── Footer ───────── -->
   <footer class="footer">
-    <p>AutoML Platform &copy; 2026 — Built with FastAPI &amp; scikit-learn</p>
+    <p>Data Forge Platform &copy; 2026 — Built with FastAPI &amp; scikit-learn</p>
   </footer>
 
   <script src="app.js"></script>

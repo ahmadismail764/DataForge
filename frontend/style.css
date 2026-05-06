@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════
-   AutoML — Style Sheet
+   Data Forge — Style Sheet
    Dark-mode, glassmorphism, modern typography (Inter)
    ═══════════════════════════════════════════════════════ */
 
@@ -361,6 +361,22 @@ tr:hover td { background: rgba(108,99,255,.06); }
   font-size: .75rem;
   color: var(--text-muted);
   margin-top: .15rem;
+}
+
+/* Charts Grid */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+.chart-container {
+  width: 100%;
+  min-width: 0;
+  height: 450px;
+  background: rgba(255,255,255,.01);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 
 /* Confusion matrix table */

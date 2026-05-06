@@ -1,13 +1,14 @@
 /* ═══════════════════════════════════════════════════════
-   AutoML — Frontend Logic
+   Data Forge — Frontend Logic
    Handles file upload, task config, training, and download
    ═══════════════════════════════════════════════════════ */
 
-const API = "http://localhost:5001";
+const API = "http://127.0.0.1:5001";
 
 // ── State ──────────────────────────────────────────
 let sessionId = null;
 let columns = [];
+let columnTypes = {};
 let modelId = null;
 
 // ── DOM refs ───────────────────────────────────────
@@ -61,6 +62,7 @@ async function handleFile(file) {
 
     sessionId = data.session_id;
     columns = data.columns;
+    columnTypes = data.column_types || {};
 
     // Show file info
     fileName.textContent = file.name;
@@ -78,6 +80,7 @@ async function handleFile(file) {
     // Scroll smoothly
     previewSection.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) {
+    console.error("Upload Error Details:", err);
     alert("Upload error: " + err.message);
   }
 }
@@ -108,11 +111,39 @@ document.querySelectorAll('input[name="task"]').forEach(radio => {
       targetGroup.classList.remove("hidden");
     }
     trainBtn.disabled = false;
+    updateTargetSelectValidation();
   });
 });
 
+function updateTargetSelectValidation() {
+  if (Object.keys(columnTypes).length === 0) return;
+  const taskRadio = document.querySelector('input[name="task"]:checked');
+  if (!taskRadio) return;
+  const task = taskRadio.value;
+  
+  Array.from(targetSelect.options).forEach(opt => {
+    const cType = columnTypes[opt.value];
+    if (task === "classification" && cType === "continuous") {
+      opt.disabled = true;
+      opt.textContent = `${opt.value} (Invalid - Continuous)`;
+    } else if (task === "regression" && cType === "categorical") {
+      opt.disabled = true;
+      opt.textContent = `${opt.value} (Invalid - Categorical)`;
+    } else {
+      opt.disabled = false;
+      opt.textContent = opt.value;
+    }
+  });
+
+  if (targetSelect.selectedOptions.length > 0 && targetSelect.selectedOptions[0].disabled) {
+    const firstEnabled = Array.from(targetSelect.options).find(o => !o.disabled);
+    if (firstEnabled) targetSelect.value = firstEnabled.value;
+  }
+}
+
 function populateTargetSelect(cols) {
   targetSelect.innerHTML = cols.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+  updateTargetSelectValidation();
 }
 
 // ── Training ───────────────────────────────────────
@@ -129,6 +160,7 @@ async function startTraining() {
   trainBtn.disabled = true;
   trainBtn.querySelector(".btn__text").textContent = "Training…";
   trainSpinner.classList.remove("hidden");
+  document.getElementById("train-error").classList.add("hidden");
   resetResults();
 
   try {
@@ -148,7 +180,9 @@ async function startTraining() {
     downloadBtn.classList.remove("hidden");
     resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) {
-    alert("Training error: " + err.message);
+    console.error("Fetch Error Details:", err);
+    document.getElementById("train-error-text").textContent = err.message;
+    document.getElementById("train-error").classList.remove("hidden");
   } finally {
     trainBtn.disabled = false;
     trainBtn.querySelector(".btn__text").textContent = "Train Model";
@@ -167,8 +201,12 @@ function renderResults(data) {
 
   // Results per algorithm
   let bodyHtml = "";
+  const plotTasks = []; // Array of functions to render Plotly charts after DOM update
+
   for (const [algoName, metrics] of Object.entries(data.results)) {
     const isBest = algoName === data.best_algorithm;
+    const safeId = algoName.replace(/[^a-zA-Z0-9]/g, '');
+    
     bodyHtml += `<div class="algo-block">`;
     bodyHtml += `<div class="algo-block__title">${escapeHtml(algoName)} ${isBest ? '<span class="best-tag">★ BEST</span>' : ''}</div>`;
     bodyHtml += `<div class="metrics-grid">`;
@@ -186,46 +224,179 @@ function renderResults(data) {
       bodyHtml += metricCard(metrics.silhouette_score, "Silhouette");
       bodyHtml += metricCard(metrics.n_clusters, "Clusters");
     }
-
     bodyHtml += `</div>`; // .metrics-grid
 
-    // Confusion matrix
+    // Chart Containers
+    const chartsHtml = [];
+    
     if (data.task === "classification" && metrics.confusion_matrix) {
-      bodyHtml += renderConfusionMatrix(metrics.confusion_matrix, data.label_names);
+      const cmId = `chart-${safeId}-cm`;
+      chartsHtml.push(`<div id="${cmId}" class="chart-container"></div>`);
+      plotTasks.push(() => renderConfusionMatrixPlot(cmId, metrics.confusion_matrix, data.label_names));
+    }
+    
+    if (data.task === "clustering" && metrics.pca_x) {
+      const pcaId = `chart-${safeId}-pca`;
+      chartsHtml.push(`<div id="${pcaId}" class="chart-container"></div>`);
+      plotTasks.push(() => renderPcaPlot(pcaId, metrics.pca_x, metrics.pca_y, metrics.pca_labels));
+      
+      const pieId = `chart-${safeId}-pie`;
+      chartsHtml.push(`<div id="${pieId}" class="chart-container"></div>`);
+      plotTasks.push(() => renderClusterPie(pieId, metrics.cluster_distribution));
     }
 
-    // Cluster distribution
-    if (data.task === "clustering" && metrics.cluster_distribution) {
-      bodyHtml += renderClusterDist(metrics.cluster_distribution);
+    if (data.task === "regression" && metrics.actual) {
+      const scatterId = `chart-${safeId}-scatter`;
+      chartsHtml.push(`<div id="${scatterId}" class="chart-container"></div>`);
+      plotTasks.push(() => renderActualVsPred(scatterId, metrics.actual, metrics.predicted));
+    }
+
+    if (metrics.feature_importances && metrics.feature_importances.length > 0) {
+      const fiId = `chart-${safeId}-fi`;
+      chartsHtml.push(`<div id="${fiId}" class="chart-container"></div>`);
+      plotTasks.push(() => renderFeatureImportance(fiId, metrics.feature_names, metrics.feature_importances));
+    }
+    
+    if (chartsHtml.length > 0) {
+      bodyHtml += `<div class="charts-grid">${chartsHtml.join("")}</div>`;
     }
 
     bodyHtml += `</div>`; // .algo-block
   }
   resultsBody.innerHTML = bodyHtml;
+  
+  // Render plots now that DOM has the containers
+  plotTasks.forEach(task => task());
 }
 
 function metricCard(value, label) {
   return `<div class="metric-card"><div class="metric-card__value">${value}</div><div class="metric-card__label">${label}</div></div>`;
 }
 
-function renderConfusionMatrix(cm, labelNames) {
-  let html = `<div class="cm-wrap"><h4>Confusion Matrix</h4><table class="cm-table">`;
-  cm.forEach((row, i) => {
-    html += "<tr>";
-    row.forEach(val => html += `<td>${val}</td>`);
-    html += "</tr>";
-  });
-  html += "</table></div>";
-  return html;
+// ── Plotly Renderers ───────────────────────────────
+const layoutBase = {
+  autosize: true,
+  paper_bgcolor: 'rgba(0,0,0,0)',
+  plot_bgcolor: 'rgba(0,0,0,0)',
+  font: { color: '#e2e8f0', family: 'Inter' },
+  margin: { t: 80, l: 80, r: 80, b: 40 }
+};
+
+function renderConfusionMatrixPlot(id, cm, labelNames) {
+  const z = cm;
+  const yLabels = labelNames ? Object.values(labelNames).reverse() : cm.map((_, i) => `Class ${i}`).reverse();
+  const xLabels = labelNames ? Object.values(labelNames) : cm.map((_, i) => `Class ${i}`);
+  
+  const data = [{
+    z: z.slice().reverse(), 
+    x: xLabels,
+    y: yLabels,
+    type: 'heatmap',
+    colorscale: 'Blues',
+    showscale: false
+  }];
+  
+  const layout = {
+    ...layoutBase,
+    title: { text: 'Confusion Matrix', font: { size: 14 } },
+    xaxis: { title: 'Predicted' },
+    yaxis: { title: 'Actual' }
+  };
+  Plotly.newPlot(id, data, layout, { displayModeBar: false, responsive: true });
 }
 
-function renderClusterDist(dist) {
-  let html = `<div class="cm-wrap"><h4>Cluster Distribution</h4><table class="cm-table"><tr>`;
-  for (const k of Object.keys(dist)) html += `<th>Cluster ${k}</th>`;
-  html += "</tr><tr>";
-  for (const v of Object.values(dist)) html += `<td>${v}</td>`;
-  html += "</tr></table></div>";
-  return html;
+function renderFeatureImportance(id, names, importances) {
+  const sorted = names.map((n, i) => ({ n, v: importances[i] })).sort((a, b) => a.v - b.v);
+  const top10 = sorted.slice(-10);
+
+  const data = [{
+    type: 'bar',
+    x: top10.map(item => item.v),
+    y: top10.map(item => item.n),
+    orientation: 'h',
+    marker: { color: '#6c63ff' }
+  }];
+  
+  const layout = {
+    ...layoutBase,
+    title: { text: 'Feature Importance (Top 10)', font: { size: 14 } },
+    margin: { t: 80, l: 180, r: 80, b: 40 }
+  };
+  Plotly.newPlot(id, data, layout, { displayModeBar: false, responsive: true });
+}
+
+function renderActualVsPred(id, actual, predicted) {
+  const minVal = Math.min(...actual, ...predicted);
+  const maxVal = Math.max(...actual, ...predicted);
+  
+  const data = [
+    {
+      x: actual, y: predicted,
+      mode: 'markers',
+      type: 'scatter',
+      name: 'Predictions',
+      marker: { color: '#00d4aa', opacity: 0.6 }
+    },
+    {
+      x: [minVal, maxVal], y: [minVal, maxVal],
+      mode: 'lines',
+      type: 'scatter',
+      name: 'Ideal',
+      line: { color: '#f56565', dash: 'dash' }
+    }
+  ];
+  
+  const layout = {
+    ...layoutBase,
+    title: { text: 'Actual vs Predicted', font: { size: 14 } },
+    xaxis: { title: 'Actual' },
+    yaxis: { title: 'Predicted' },
+    showlegend: false
+  };
+  Plotly.newPlot(id, data, layout, { displayModeBar: false, responsive: true });
+}
+
+function renderPcaPlot(id, x, y, labels) {
+  const data = [{
+    x: x, y: y,
+    mode: 'markers',
+    type: 'scatter',
+    marker: {
+      color: labels,
+      colorscale: 'Viridis',
+      size: 8,
+      opacity: 0.8
+    }
+  }];
+  
+  const layout = {
+    ...layoutBase,
+    title: { text: 'PCA Cluster Map', font: { size: 14 } },
+    xaxis: { title: 'Component 1', zeroline: false },
+    yaxis: { title: 'Component 2', zeroline: false }
+  };
+  Plotly.newPlot(id, data, layout, { displayModeBar: false, responsive: true });
+}
+
+function renderClusterPie(id, dist) {
+  const labels = Object.keys(dist).map(k => `Cluster ${k}`);
+  const values = Object.values(dist);
+  
+  const data = [{
+    values: values,
+    labels: labels,
+    type: 'pie',
+    hole: .4,
+    marker: { colors: ['#6c63ff', '#00d4aa', '#f56565', '#fbbf24', '#3b82f6'] }
+  }];
+  
+  const layout = {
+    ...layoutBase,
+    title: { text: 'Cluster Distribution', font: { size: 14 }, y: 0.95 },
+    legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: -0.2 },
+    margin: { t: 60, l: 40, r: 40, b: 80 }
+  };
+  Plotly.newPlot(id, data, layout, { displayModeBar: false, responsive: true });
 }
 
 // ── Download ───────────────────────────────────────

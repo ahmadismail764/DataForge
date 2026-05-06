@@ -10,12 +10,14 @@ from sklearn.preprocessing import StandardScaler, OrdinalEncoder
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 
 # Metrics
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score, confusion_matrix,
     mean_absolute_error, mean_squared_error, r2_score, silhouette_score,
 )
+from sklearn.utils.multiclass import type_of_target
 
 # Imbalanced-learn
 from imblearn.over_sampling import SMOTE
@@ -61,7 +63,7 @@ def _build_preprocessor(numeric_cols: list[str], categorical_cols: list[str]):
 def _is_imbalanced(y: pd.Series, threshold: float = 0.4) -> bool:
     """Return True if the minority class ratio is below *threshold*."""
     counts = y.value_counts(normalize=True)
-    return counts.min() < threshold
+    return bool(counts.min() < threshold)
 
 
 def run_classification(df: pd.DataFrame, target: str) -> dict:
@@ -71,6 +73,9 @@ def run_classification(df: pd.DataFrame, target: str) -> dict:
     feature_cols, numeric_cols, categorical_cols = _detect_columns(df, target)
     X = df[feature_cols]
     y = df[target]
+
+    if type_of_target(y) == 'continuous':
+        raise ValueError(f"Target column '{target}' contains continuous values. Classification expects discrete classes. Please select Regression instead.")
 
     # Encode target if it is categorical
     target_mapping = None
@@ -123,12 +128,28 @@ def run_classification(df: pd.DataFrame, target: str) -> dict:
         y_pred = pipe.predict(X_test)
 
         f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
+        
+        # Extract feature importances
+        try:
+            feature_names = pipe.named_steps["preprocessor"].get_feature_names_out().tolist()
+        except Exception:
+            feature_names = [f"Feature {i}" for i in range(X_train.shape[1])]
+            
+        importances = []
+        if hasattr(model, "feature_importances_"):
+            importances = model.feature_importances_.tolist()
+        elif hasattr(model, "coef_"):
+            coef = model.coef_[0] if len(model.coef_.shape) > 1 else model.coef_
+            importances = np.abs(coef).tolist()
+
         all_results[name] = {
-            "accuracy": round(accuracy_score(y_test, y_pred), 4),
-            "precision": round(precision_score(y_test, y_pred, average="weighted", zero_division=0), 4),
-            "recall": round(recall_score(y_test, y_pred, average="weighted", zero_division=0), 4),
-            "f1_score": round(f1, 4),
+            "accuracy": float(round(accuracy_score(y_test, y_pred), 4)),
+            "precision": float(round(precision_score(y_test, y_pred, average="weighted", zero_division=0), 4)),
+            "recall": float(round(recall_score(y_test, y_pred, average="weighted", zero_division=0), 4)),
+            "f1_score": float(round(f1, 4)),
             "confusion_matrix": confusion_matrix(y_test, y_pred).tolist(),
+            "feature_names": feature_names,
+            "feature_importances": importances,
         }
 
         if f1 > best_f1:
@@ -163,6 +184,9 @@ def run_regression(df: pd.DataFrame, target: str) -> dict:
     X = df[feature_cols]
     y = df[target]
 
+    if y.dtype == object or y.dtype.name == 'category' or type_of_target(y) == 'multiclass':
+        raise ValueError(f"Target column '{target}' contains categorical classes. Regression expects continuous numerical values. Please select Classification instead.")
+
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42,
     )
@@ -186,10 +210,34 @@ def run_regression(df: pd.DataFrame, target: str) -> dict:
         y_pred = pipe.predict(X_test)
 
         r2 = r2_score(y_test, y_pred)
+        
+        # Extract feature importances
+        try:
+            feature_names = pipe.named_steps["preprocessor"].get_feature_names_out().tolist()
+        except Exception:
+            feature_names = [f"Feature {i}" for i in range(X_train.shape[1])]
+            
+        importances = []
+        if hasattr(model, "feature_importances_"):
+            importances = model.feature_importances_.tolist()
+        elif hasattr(model, "coef_"):
+            coef = model.coef_[0] if len(model.coef_.shape) > 1 else model.coef_
+            importances = np.abs(coef).tolist()
+            
+        # Actual vs Predicted (sample max 150)
+        sample_size = min(150, len(y_test))
+        indices = np.random.choice(len(y_test), sample_size, replace=False)
+        actual = y_test.iloc[indices].tolist() if hasattr(y_test, "iloc") else np.array(y_test)[indices].tolist()
+        predicted = np.array(y_pred)[indices].tolist()
+
         all_results[name] = {
-            "mae": round(mean_absolute_error(y_test, y_pred), 4),
-            "mse": round(mean_squared_error(y_test, y_pred), 4),
-            "r2_score": round(r2, 4),
+            "mae": float(round(mean_absolute_error(y_test, y_pred), 4)),
+            "mse": float(round(mean_squared_error(y_test, y_pred), 4)),
+            "r2_score": float(round(r2, 4)),
+            "feature_names": feature_names,
+            "feature_importances": importances,
+            "actual": actual,
+            "predicted": predicted,
         }
 
         if r2 > best_r2:
@@ -236,10 +284,29 @@ def run_clustering(df: pd.DataFrame) -> dict:
         sil = silhouette_score(X_transformed, labels)
 
         unique, counts = np.unique(labels, return_counts=True)
+        
+        # PCA Projection
+        pca = PCA(n_components=2)
+        if hasattr(X_transformed, "toarray"):
+            X_dense = X_transformed.toarray()
+        else:
+            X_dense = np.array(X_transformed)
+            
+        if X_dense.shape[1] >= 2:
+            X_pca = pca.fit_transform(X_dense)
+        else:
+            X_pca = np.hstack((X_dense, np.zeros((X_dense.shape[0], 1))))
+            
+        sample_size = min(300, len(X_pca))
+        indices = np.random.choice(len(X_pca), sample_size, replace=False)
+
         all_results[name] = {
-            "silhouette_score": round(sil, 4),
+            "silhouette_score": float(round(sil, 4)),
             "n_clusters": int(len(unique)),
             "cluster_distribution": {int(k): int(v) for k, v in zip(unique, counts)},
+            "pca_x": X_pca[indices, 0].tolist(),
+            "pca_y": X_pca[indices, 1].tolist(),
+            "pca_labels": labels[indices].tolist(),
         }
 
         if sil > best_silhouette:
