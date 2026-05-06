@@ -1,11 +1,7 @@
-"""
-main.py — FastAPI application for the AutoML platform.
-Endpoints: upload, train, download.
-"""
-
 import os
 import uuid
 import joblib
+import uvicorn
 import pandas as pd
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -136,3 +132,7 @@ async def download_model(model_id: str):
         filename=f"model_{model_id}.joblib",
         media_type="application/octet-stream",
     )
+
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", port=5001, reload=True)

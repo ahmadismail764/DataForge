@@ -3,7 +3,7 @@
    Handles file upload, task config, training, and download
    ═══════════════════════════════════════════════════════ */
 
-const API = "http://localhost:8000";
+const API = "http://localhost:5001";
 
 // ── State ──────────────────────────────────────────
 let sessionId = null;

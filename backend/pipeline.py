@@ -66,6 +66,8 @@ def _is_imbalanced(y: pd.Series, threshold: float = 0.4) -> bool:
 
 def run_classification(df: pd.DataFrame, target: str) -> dict:
     """Run the full classification pipeline and return metrics + the best pipeline."""
+    df = df.dropna(subset=[target])
+    
     feature_cols, numeric_cols, categorical_cols = _detect_columns(df, target)
     X = df[feature_cols]
     y = df[target]
@@ -76,8 +78,11 @@ def run_classification(df: pd.DataFrame, target: str) -> dict:
         target_mapping = {label: idx for idx, label in enumerate(y.unique())}
         y = y.map(target_mapping)
 
+    # Check if stratify is safe (min 2 samples per class)
+    stratify_param = y if y.value_counts().min() >= 2 else None
+
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y,
+        X, y, test_size=0.2, random_state=42, stratify=stratify_param,
     )
 
     preprocessor = _build_preprocessor(numeric_cols, categorical_cols)
@@ -152,6 +157,8 @@ def run_classification(df: pd.DataFrame, target: str) -> dict:
 
 def run_regression(df: pd.DataFrame, target: str) -> dict:
     """Run the full regression pipeline and return metrics + the best pipeline."""
+    df = df.dropna(subset=[target])
+    
     feature_cols, numeric_cols, categorical_cols = _detect_columns(df, target)
     X = df[feature_cols]
     y = df[target]
