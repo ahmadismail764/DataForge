@@ -1,4 +1,9 @@
 import os
+import sys
+
+# Ensure the backend directory is in the path to fix absolute imports when running from the root directory
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 import uuid
 import joblib
 import uvicorn
