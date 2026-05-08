@@ -5,21 +5,15 @@ from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, OrdinalEncoder
-
-# Algorithms
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-
-# Metrics
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score, confusion_matrix,
     mean_absolute_error, mean_squared_error, r2_score, silhouette_score,
 )
 from sklearn.utils.multiclass import type_of_target
-
-# Imbalanced-learn
 from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
 
@@ -33,7 +27,7 @@ def _detect_columns(df: pd.DataFrame, target: str | None):
 
 
 def _build_preprocessor(numeric_cols: list[str], categorical_cols: list[str]):
-    """Build a ColumnTransformer that imputes + scales numerics and imputes + encodes categoricals."""
+    """Build a fresh ColumnTransformer for imputation + scaling/encoding."""
     transformers = []
     if numeric_cols:
         transformers.append((
@@ -56,50 +50,66 @@ def _build_preprocessor(numeric_cols: list[str], categorical_cols: list[str]):
     return ColumnTransformer(transformers=transformers, remainder="drop")
 
 
+def _get_feature_importances(fitted_pipeline):
+    """Extract feature names and importances from a fitted pipeline."""
+    # Get feature names from the preprocessor
+    try:
+        feature_names = fitted_pipeline.named_steps["preprocessor"].get_feature_names_out().tolist()
+    except Exception:
+        feature_names = []
+
+    # Get the fitted model from the pipeline
+    fitted_model = fitted_pipeline.named_steps["model"]
+
+    importances = []
+    if hasattr(fitted_model, "feature_importances_"):
+        importances = fitted_model.feature_importances_.tolist()
+    elif hasattr(fitted_model, "coef_"):
+        coef = fitted_model.coef_
+        if coef.ndim > 1:
+            coef = coef[0]
+        importances = np.abs(coef).tolist()
+
+    return feature_names, importances
+
+
 # ---------------------------------------------------------------------------
 # Classification
 # ---------------------------------------------------------------------------
 
-def _is_imbalanced(y: pd.Series, threshold: float = 0.4) -> bool:
-    """Return True if the minority class ratio is below *threshold*."""
-    counts = y.value_counts(normalize=True)
-    return bool(counts.min() < threshold)
-
-
 def run_classification(df: pd.DataFrame, target: str) -> dict:
-    """Run the full classification pipeline and return metrics + the best pipeline."""
+    """Run classification with Random Forest and Logistic Regression."""
     df = df.dropna(subset=[target])
-    
+
     feature_cols, numeric_cols, categorical_cols = _detect_columns(df, target)
     X = df[feature_cols]
     y = df[target]
 
     if type_of_target(y) == 'continuous':
-        raise ValueError(f"Target column '{target}' contains continuous values. Classification expects discrete classes. Please select Regression instead.")
+        raise ValueError(
+            f"Target column '{target}' contains continuous values. "
+            "Please select Regression instead."
+        )
 
-    # Encode target if it is categorical
+    # Encode string labels to integers
     target_mapping = None
     if y.dtype == object or y.dtype.name == "category":
         target_mapping = {label: idx for idx, label in enumerate(y.unique())}
         y = y.map(target_mapping)
 
-    # Check if stratify is safe (min 2 samples per class)
-    stratify_param = y if y.value_counts().min() >= 2 else None
-
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=stratify_param,
+        X, y, test_size=0.2, random_state=42
     )
 
-    preprocessor = _build_preprocessor(numeric_cols, categorical_cols)
+    # Check if SMOTE is needed (minority class < 40%)
+    class_ratios = y_train.value_counts(normalize=True)
+    use_smote = bool(class_ratios.min() < 0.4)
+    smote_k = 5
 
-    # Check imbalance and decide whether to use SMOTE
-    use_smote = _is_imbalanced(y_train)
-
-    # Determine safe k_neighbors for SMOTE based on smallest class in training set
     if use_smote:
         min_class_count = y_train.value_counts().min()
         if min_class_count < 2:
-            use_smote = False  # cannot apply SMOTE with < 2 samples
+            use_smote = False
         else:
             smote_k = min(min_class_count - 1, 5)
 
@@ -112,6 +122,9 @@ def run_classification(df: pd.DataFrame, target: str) -> dict:
     all_results = {}
 
     for name, model in algorithms.items():
+        # Build a FRESH preprocessor for each model
+        preprocessor = _build_preprocessor(numeric_cols, categorical_cols)
+
         if use_smote:
             pipe = ImbPipeline([
                 ("preprocessor", preprocessor),
@@ -128,25 +141,13 @@ def run_classification(df: pd.DataFrame, target: str) -> dict:
         y_pred = pipe.predict(X_test)
 
         f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
-        
-        # Extract feature importances
-        try:
-            feature_names = pipe.named_steps["preprocessor"].get_feature_names_out().tolist()
-        except Exception:
-            feature_names = [f"Feature {i}" for i in range(X_train.shape[1])]
-            
-        importances = []
-        if hasattr(model, "feature_importances_"):
-            importances = model.feature_importances_.tolist()
-        elif hasattr(model, "coef_"):
-            coef = model.coef_[0] if len(model.coef_.shape) > 1 else model.coef_
-            importances = np.abs(coef).tolist()
+        feature_names, importances = _get_feature_importances(pipe)
 
         all_results[name] = {
-            "accuracy": float(round(accuracy_score(y_test, y_pred), 4)),
-            "precision": float(round(precision_score(y_test, y_pred, average="weighted", zero_division=0), 4)),
-            "recall": float(round(recall_score(y_test, y_pred, average="weighted", zero_division=0), 4)),
-            "f1_score": float(round(f1, 4)),
+            "accuracy": round(float(accuracy_score(y_test, y_pred)), 4),
+            "precision": round(float(precision_score(y_test, y_pred, average="weighted", zero_division=0)), 4),
+            "recall": round(float(recall_score(y_test, y_pred, average="weighted", zero_division=0)), 4),
+            "f1_score": round(float(f1), 4),
             "confusion_matrix": confusion_matrix(y_test, y_pred).tolist(),
             "feature_names": feature_names,
             "feature_importances": importances,
@@ -157,7 +158,7 @@ def run_classification(df: pd.DataFrame, target: str) -> dict:
             best_name = name
             best_pipeline = pipe
 
-    # Build reverse mapping for label names
+    # Reverse mapping for label names on confusion matrix
     label_names = None
     if target_mapping:
         label_names = {v: k for k, v in target_mapping.items()}
@@ -177,31 +178,35 @@ def run_classification(df: pd.DataFrame, target: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def run_regression(df: pd.DataFrame, target: str) -> dict:
-    """Run the full regression pipeline and return metrics + the best pipeline."""
+    """Run regression with Random Forest and Linear Regression."""
     df = df.dropna(subset=[target])
-    
+
     feature_cols, numeric_cols, categorical_cols = _detect_columns(df, target)
     X = df[feature_cols]
     y = df[target]
 
-    if y.dtype == object or y.dtype.name == 'category' or type_of_target(y) == 'multiclass':
-        raise ValueError(f"Target column '{target}' contains categorical classes. Regression expects continuous numerical values. Please select Classification instead.")
+    if y.dtype == object or y.dtype.name == "category":
+        raise ValueError(
+            f"Target column '{target}' contains categorical values. "
+            "Please select Classification instead."
+        )
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42,
+        X, y, test_size=0.2, random_state=42
     )
 
-    preprocessor = _build_preprocessor(numeric_cols, categorical_cols)
-
     algorithms = {
-        "Random Forest Regressor": RandomForestRegressor(n_estimators=100, random_state=42),
-        "Ridge Regression": Ridge(alpha=1.0),
+        "Random Forest": RandomForestRegressor(n_estimators=100, random_state=42),
+        "Linear Regression": LinearRegression(),
     }
 
     best_name, best_pipeline, best_r2 = None, None, -np.inf
     all_results = {}
 
     for name, model in algorithms.items():
+        # Build a FRESH preprocessor for each model
+        preprocessor = _build_preprocessor(numeric_cols, categorical_cols)
+
         pipe = Pipeline([
             ("preprocessor", preprocessor),
             ("model", model),
@@ -210,30 +215,18 @@ def run_regression(df: pd.DataFrame, target: str) -> dict:
         y_pred = pipe.predict(X_test)
 
         r2 = r2_score(y_test, y_pred)
-        
-        # Extract feature importances
-        try:
-            feature_names = pipe.named_steps["preprocessor"].get_feature_names_out().tolist()
-        except Exception:
-            feature_names = [f"Feature {i}" for i in range(X_train.shape[1])]
-            
-        importances = []
-        if hasattr(model, "feature_importances_"):
-            importances = model.feature_importances_.tolist()
-        elif hasattr(model, "coef_"):
-            coef = model.coef_[0] if len(model.coef_.shape) > 1 else model.coef_
-            importances = np.abs(coef).tolist()
-            
-        # Actual vs Predicted (sample max 150)
+        feature_names, importances = _get_feature_importances(pipe)
+
+        # Sample actual vs predicted for the scatter plot (max 150 points)
         sample_size = min(150, len(y_test))
         indices = np.random.choice(len(y_test), sample_size, replace=False)
-        actual = y_test.iloc[indices].tolist() if hasattr(y_test, "iloc") else np.array(y_test)[indices].tolist()
-        predicted = np.array(y_pred)[indices].tolist()
+        actual = y_test.iloc[indices].tolist()
+        predicted = y_pred[indices].tolist()
 
         all_results[name] = {
-            "mae": float(round(mean_absolute_error(y_test, y_pred), 4)),
-            "mse": float(round(mean_squared_error(y_test, y_pred), 4)),
-            "r2_score": float(round(r2, 4)),
+            "mae": round(float(mean_absolute_error(y_test, y_pred)), 4),
+            "mse": round(float(mean_squared_error(y_test, y_pred)), 4),
+            "r2_score": round(float(r2), 4),
             "feature_names": feature_names,
             "feature_importances": importances,
             "actual": actual,
@@ -258,11 +251,9 @@ def run_regression(df: pd.DataFrame, target: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def run_clustering(df: pd.DataFrame) -> dict:
-    """Run the full clustering pipeline and return metrics + the best pipeline."""
+    """Run clustering with KMeans (k=3 and k=5)."""
     _, numeric_cols, categorical_cols = _detect_columns(df, target=None)
     X = df.copy()
-
-    preprocessor = _build_preprocessor(numeric_cols, categorical_cols)
 
     algorithms = {
         "KMeans (k=3)": KMeans(n_clusters=3, random_state=42, n_init=10),
@@ -273,6 +264,9 @@ def run_clustering(df: pd.DataFrame) -> dict:
     all_results = {}
 
     for name, model in algorithms.items():
+        # Build a FRESH preprocessor for each model
+        preprocessor = _build_preprocessor(numeric_cols, categorical_cols)
+
         pipe = Pipeline([
             ("preprocessor", preprocessor),
             ("model", model),
@@ -284,24 +278,23 @@ def run_clustering(df: pd.DataFrame) -> dict:
         sil = silhouette_score(X_transformed, labels)
 
         unique, counts = np.unique(labels, return_counts=True)
-        
-        # PCA Projection
-        pca = PCA(n_components=2)
+
+        # PCA projection for visualization
         if hasattr(X_transformed, "toarray"):
             X_dense = X_transformed.toarray()
         else:
             X_dense = np.array(X_transformed)
-            
+
         if X_dense.shape[1] >= 2:
-            X_pca = pca.fit_transform(X_dense)
+            X_pca = PCA(n_components=2).fit_transform(X_dense)
         else:
             X_pca = np.hstack((X_dense, np.zeros((X_dense.shape[0], 1))))
-            
+
         sample_size = min(300, len(X_pca))
         indices = np.random.choice(len(X_pca), sample_size, replace=False)
 
         all_results[name] = {
-            "silhouette_score": float(round(sil, 4)),
+            "silhouette_score": round(float(sil), 4),
             "n_clusters": int(len(unique)),
             "cluster_distribution": {int(k): int(v) for k, v in zip(unique, counts)},
             "pca_x": X_pca[indices, 0].tolist(),

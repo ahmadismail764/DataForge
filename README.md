@@ -78,6 +78,14 @@ python3 -m http.server 5500
 
 Then navigate to `http://localhost:5500`.
 
+### 6) Launch the notebook (optional)
+
+```bash
+jupyter notebook notebook.ipynb
+```
+
+The notebook provides the same AutoML pipeline with richer inline visualizations — ideal for exploration and review.
+
 ## API Endpoints
 
 - `POST /api/upload` - Upload dataset and get preview
